@@ -1,0 +1,81 @@
+import subprocess
+import time
+from playwright.sync_api import sync_playwright
+import pyautogui
+
+def join_teams_meeting(url):
+    p = sync_playwright().start()
+    browser = p.chromium.launch(headless=False)
+    context = browser.new_context(permissions=["microphone", "camera"])
+    page = context.new_page()
+
+    print("Opening Teams meeting...")
+    page.goto(url)
+    page.wait_for_timeout(3000)
+
+    try:
+        cancel_button_x, cancel_button_y = 1050, 300
+        pyautogui.moveTo(cancel_button_x, cancel_button_y, duration=1)
+        pyautogui.click()
+    except:
+        pass
+
+    try:
+        page.click("text='Continue on this browser'", timeout=10000)
+    except:
+        print("Continue button not found")
+
+    page.wait_for_timeout(8000)
+
+    try:
+        page.fill("input[data-tid='prejoin-display-name-input']", "Guest User")
+    except:
+        pass
+
+    time.sleep(4)
+
+    try:
+        page.click("button:has-text('Join now')")
+        print("Meeting joined successfully.")
+    except:
+        print("Join now button not found")
+
+    return p, browser, page
+
+def leave_meeting(p, browser, page):
+    try:
+        page.click("button[aria-label='Leave']", timeout=10000)
+    except:
+        print("Leave button not found")
+    browser.close()
+    p.stop()
+    print("Meeting left and browser closed.")
+
+if __name__ == "__main__":
+    url = input("Paste full Teams meeting URL: ").strip()
+    duration = int(input("Enter meeting duration in minutes: ").strip()) * 60
+
+    # Step 1: Join the meeting
+    p, browser, page = join_teams_meeting(url)
+
+    # Step 2: Start script.py in parallel
+    print("Starting script.py...")
+    process = subprocess.Popen(["python3", "script.py"])
+
+    # Step 3: Wait for meeting duration
+    print(f"Waiting in meeting for {duration // 60} minutes...")
+    time.sleep(duration)
+
+    # Step 4: Leave the meeting
+    print("Leaving meeting now...")
+    leave_meeting(p, browser, page)
+
+    # Step 5: Stop script.py if still running
+    if process.poll() is None:
+        print("Terminating script.py...")
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        print("script.py has been stopped.")
